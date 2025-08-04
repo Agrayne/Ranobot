@@ -1,15 +1,15 @@
 import discord
 from discord.ui import Select, View
 from discord.ext.pages import Page
-from bot_utils import fetch_series_info
+from bot_utils import fetch_series_info, create_embed
 
-#
-def create_embed(color, title, description, image, tags):
-    emb = discord.Embed(color=color, title=title, description=description)
-    emb.set_image(url=image)
-    if tags:
-        emb.add_field(name="Tags", value=", ".join(tags), inline=True)
-    return emb
+
+# def create_embed(color, title, description, image, tags):
+#     emb = discord.Embed(color=color, title=title, description=description)
+#     emb.set_image(url=image)
+#     if tags:
+#         emb.add_field(name="Tags", value=", ".join(tags), inline=True)
+#     return emb
 
 
 class ResultsSelector(Select):
@@ -36,8 +36,7 @@ class ResultsSelector(Select):
         selected_sn = int(self.values[0])
         ln_name = self.sn_dict[selected_sn]
         ln_id = self.results_dict[ln_name]
-        (color, title, description, image, tags) = fetch_series_info(ln_id)
-        emb = create_embed(color, title, description, image, tags)
+        emb = fetch_series_info(ln_id)
         await interaction.message.edit(embed=emb, view=None)
 
 class ResultsView(View):
