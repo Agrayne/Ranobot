@@ -1,2 +1,2 @@
 # Ranobot
-A simple discord bot to get information from ranobedb.org
+A simple discord bot to search Light Novel information from [RanobeDB](https://ranobedb.org) and display them.
