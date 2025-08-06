@@ -5,7 +5,7 @@ from discord import Option
 from discord.ext import commands, pages
 
 from bot_utils import fetch_series_info, search_series
-from bot_ext import create_results_page
+from bot_ext import GraphButtonView, create_results_page
 
 load_dotenv()
 TOKEN = os.getenv('BOT_TOKEN')
@@ -17,7 +17,8 @@ bot = commands.Bot(command_prefix="!?", intents=intents)
 @bot.event
 async def on_ready():
     await bot.sync_commands()
-    print(f"{bot.user} is Online\n____________________")
+    print(f"{bot.user} is Online")
+    print(f"Connected to {len(bot.guilds)} servers:")
 
 
 @bot.slash_command(name="search", description="Searches for Light Novels")
@@ -33,8 +34,10 @@ async def fetch(
         await interaction.followup.send("No results found")
     elif isinstance(results, str):
         await interaction.followup.send(results)
-    elif isinstance(results, discord.Embed):
-        await interaction.followup.send(embed=results)
+    elif isinstance(results, tuple) and len(results)>2:
+        embed, vol_rel_dates, predict, title, latest_vol = results
+        button_view = GraphButtonView(vol_rel_dates, predict, title, latest_vol)
+        await interaction.followup.send(embed=embed, view=button_view)
     else:
         count, search_results = results
         page_list = create_results_page(count, search_results)

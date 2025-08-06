@@ -2,14 +2,32 @@ import discord
 from discord.ui import Select, View
 from discord.ext.pages import Page
 from bot_utils import fetch_series_info, create_embed
+from graph import generate_graph
 
 
-# def create_embed(color, title, description, image, tags):
-#     emb = discord.Embed(color=color, title=title, description=description)
-#     emb.set_image(url=image)
-#     if tags:
-#         emb.add_field(name="Tags", value=", ".join(tags), inline=True)
-#     return emb
+####### Custom View and Selector Classes #######
+
+class GraphButtonView(discord.ui.View):
+    def __init__(self, vol_rel_dates, predict, title, vol_title):
+        super().__init__()
+        self.vol_rel_dates = vol_rel_dates
+        self.predict = predict
+        self.title = title
+        self.vol_title = vol_title
+        # super().__init__(timeout=100)
+    @discord.ui.button(label="Generate Published Volume Graph", style=discord.ButtonStyle.secondary, emoji="📈")
+    async def button_callback(self, button, interaction):
+        try:
+            await interaction.response.defer()
+            buf = generate_graph(self.vol_rel_dates, self.predict, self.title, self.vol_title)
+            file = discord.File(buf, filename="chart.png")
+            await interaction.followup.send(file=file)
+            button.disabled = True
+            await interaction.message.edit(view=self)
+        except Exception as e:
+            await interaction.followup.send("🚨 An unexpected error occurred.", ephemeral=True)
+            import traceback
+            traceback.print_exc()
 
 
 class ResultsSelector(Select):
@@ -32,12 +50,26 @@ class ResultsSelector(Select):
             ]
         )
     async def callback(self, interaction):
-        await interaction.response.defer()
-        selected_sn = int(self.values[0])
-        ln_name = self.sn_dict[selected_sn]
-        ln_id = self.results_dict[ln_name]
-        emb = fetch_series_info(ln_id)
-        await interaction.message.edit(embed=emb, view=None)
+        try:
+            await interaction.response.defer()
+            selected_sn = int(self.values[0])
+            ln_name = self.sn_dict[selected_sn]
+            ln_id = self.results_dict[ln_name]
+            embed, vol_rel_dates, predict, title, latest_vol = fetch_series_info(ln_id)
+            button_view = GraphButtonView(vol_rel_dates, predict, title, latest_vol)
+            await interaction.message.edit(embed=embed, view=button_view)
+        except discord.NotFound:
+            await interaction.followup.send("❌ Message no longer exists. Please try searching again.", ephemeral=True)
+
+        except discord.HTTPException as e:
+            await interaction.followup.send("⚠️ Something went wrong with Discord's API.", ephemeral=True)
+            print(f"Discord HTTP error: {e}")
+
+        except Exception as e:
+            await interaction.followup.send("🚨 An unexpected error occurred.", ephemeral=True)
+            import traceback
+            traceback.print_exc()
+
 
 class ResultsView(View):
     def __init__(self, page, results_dict):

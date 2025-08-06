@@ -15,6 +15,24 @@ BOOKWALKER_ENDPOINT = "https://bookwalker.jp/series/"
 
 
 ######## Data Classes ########
+
+@dataclass
+class Volume:
+    id: int
+    title: str
+    sort_order: int
+    jp_release_date: Optional[date] = None
+    en_release_date: Optional[date] = None
+
+    @classmethod
+    def from_series_json(cls, series_json: dict) -> 'Volume':
+        return cls(
+            id=series_json["id"],
+            title=series_json["title"],
+            sort_order=series_json["sort_order"],
+            jp_release_date=datetime.strptime(str(series_json.get("c_release_date")), "%Y%m%d").date()
+        )
+
 @dataclass
 class Series:
     id: int
@@ -30,21 +48,21 @@ class Series:
     bookwalker_url: Optional[str]
     lang: str
     tags: List[str]
-    # volumes: List[Volume] = field(default_factory=list)
+    volumes: List[Volume] = field(default_factory=list)
 
     @classmethod
     def from_json(cls, data: dict) -> 'Series':
         series_data = data["series"]
+        volumes = [Volume.from_series_json(vol) for vol in series_data.get("books", [])]
         tags = [tag["name"].capitalize() for tag in series_data.get("tags", [])]
         if series_data["lang"]=='ja':
             desc = series_data.get("book_description", {}).get("description_ja")
         else:
             desc = series_data.get("book_description", {}).get("description")
-        first_released = datetime.strptime(str(series_data.get("start_date")), "%Y%m%d").date()
-        latest_released = datetime.strptime(str(series_data.get("books")[-1]["c_release_date"]), "%Y%m%d").date()
+        first_released = str(datetime.strptime(str(series_data.get("start_date")), "%Y%m%d").date()) + " (JP)"
+        latest_released = str(volumes[-1].jp_release_date) + " (JP)"
         bookwalker_id = str(series_data.get("bookwalker_id"))
         bookwalker_url = BOOKWALKER_ENDPOINT+bookwalker_id if bookwalker_id is not None else None
-        # volumes = [Volume.from_json(book) for book in series_data.get("books", [])]
         return cls(
             id=series_data["id"],
             title=series_data["title"],
@@ -52,21 +70,21 @@ class Series:
             romaji=series_data.get("romaji"),
             original_romaji=series_data.get("romaji_orig"),
             description=desc,
-            publication_status=series_data.get("publication_status").capitalize(),
+            publication_status=series_data.get("publication_status"),
             first_released=first_released,
             latest_released=latest_released,
             image_url=IMAGES_ENDPOINT+series_data["books"][0]["image"]["filename"],
             bookwalker_url=bookwalker_url,
             lang=series_data["lang"],
             tags=tags,
-            # volumes=volumes
+            volumes=volumes
         )
 
 ####### Misc Functions #######
 def create_embed(color, title, description, publication_status, first_released, latest_released, image, bw_url, tags):
     embed = Embed(color=color, title=title, description=description)
     embed.set_image(url=image)
-    embed.add_field(name="Publication Status", value=publication_status, inline=True)
+    embed.add_field(name="Publication Status", value=publication_status.capitalize(), inline=True)
     embed.add_field(name="First Release", value=first_released, inline=True)
     embed.add_field(name="Latest Release", value=latest_released, inline=True)
     if bw_url is not None:
@@ -103,14 +121,18 @@ def fetch_series_info(id):
     response = requests.get(SERIES_API_ENDPOINT+f'/{str(id)}')
     data = response.json()
     series = Series.from_json(data)
+    vol_rel_dates = {}
+    latest_vol = series.volumes[-1].title
+    for vol in sorted(series.volumes, key=lambda v: v.sort_order):
+        vol_rel_dates[vol.sort_order] = vol.jp_release_date
+    predict = True if series.publication_status == "ongoing" else False
     if series.lang == 'ja':
         description = f"***{series.romaji}***\n\n"+series.description+"\n\n"
         embed =  create_embed(10216,series.title,description,series.publication_status,series.first_released,series.latest_released,series.image_url,series.bookwalker_url,series.tags)
-        return embed
     else:
         description = f"***{series.original_title} | {series.original_romaji}***\n\n"+series.description+"\n\n"
         embed =  create_embed(15204352,series.title,description,series.publication_status,series.first_released,series.latest_released,series.image_url,series.bookwalker_url,series.tags)
-        return embed
+    return (embed, vol_rel_dates, predict, series.title, latest_vol)
 
 async def search_series(title, sort, licensed):
     params = {
@@ -130,7 +152,7 @@ async def search_series(title, sort, licensed):
     elif count==1:
         series_info = fetch_series_info(lns[0]['id'])
         return series_info
-    elif count>6000:
+    elif count>5800:
         return "More than 6000 results.\nBe more specific with the search terms."
     else:
         all_data = await fetch_all_results_async(SERIES_API_ENDPOINT, total_pages, params)
