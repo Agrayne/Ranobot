@@ -14,6 +14,21 @@ IMAGES_ENDPOINT = "https://images.ranobedb.org/"
 BOOKWALKER_ENDPOINT = "https://bookwalker.jp/series/"
 
 
+####### Misc Functions 1 #######
+
+def convert_to_date(date_str, vname_or_sid=None):
+    date_str = str(date_str)
+    try:
+        d = datetime.strptime(date_str, "%Y%m%d").date()
+        return d
+    except ValueError:
+        if date_str[-2:] == "99":                   # Some volumes on the site have their release dates as 99
+            date_str = date_str[:-2]+"25"           # This is just a quick workaround until the API fixed it
+        print(f"Series ID or Volume Name: [{vname_or_sid}] had incorrect date. Replaced with '25'")
+        d = datetime.strptime(date_str, "%Y%m%d").date()
+        return d
+
+
 ######## Data Classes ########
 
 @dataclass
@@ -30,7 +45,7 @@ class Volume:
             id=series_json["id"],
             title=series_json["title"],
             sort_order=series_json["sort_order"],
-            jp_release_date=datetime.strptime(str(series_json.get("c_release_date")), "%Y%m%d").date()
+            jp_release_date=convert_to_date(series_json.get("c_release_date"), series_json.get("title"))
         )
 
 @dataclass
@@ -59,7 +74,7 @@ class Series:
             desc = series_data.get("book_description", {}).get("description_ja")
         else:
             desc = series_data.get("book_description", {}).get("description")
-        first_released = str(datetime.strptime(str(series_data.get("start_date")), "%Y%m%d").date()) + " (JP)"
+        first_released = str(convert_to_date(series_data.get("start_date"),series_data.get("id"))) + " (JP)"
         latest_released = str(volumes[-1].jp_release_date) + " (JP)"
         bookwalker_id = str(series_data.get("bookwalker_id"))
         bookwalker_url = BOOKWALKER_ENDPOINT+bookwalker_id if bookwalker_id is not None else None
@@ -80,13 +95,15 @@ class Series:
             volumes=volumes
         )
 
-####### Misc Functions #######
+####### Misc Functions 2 #######
+
 def create_embed(color, title, description, publication_status, first_released, latest_released, image, bw_url, tags):
     embed = Embed(color=color, title=title, description=description)
     embed.set_image(url=image)
     embed.add_field(name="Publication Status", value=publication_status.capitalize(), inline=True)
     embed.add_field(name="First Release", value=first_released, inline=True)
     embed.add_field(name="Latest Release", value=latest_released, inline=True)
+    embed.set_footer(text="Data fetched from RanobeDB")
     if bw_url is not None:
         embed.add_field(name="Links", value=f"[Bookwalker (jp)]({bw_url})", inline=False)
     if tags:

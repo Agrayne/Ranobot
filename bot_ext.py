@@ -14,11 +14,15 @@ class GraphButtonView(discord.ui.View):
         self.predict = predict
         self.title = title
         self.vol_title = vol_title
-        # super().__init__(timeout=100)
-    @discord.ui.button(label="Generate Published Volume Graph", style=discord.ButtonStyle.secondary, emoji="📈")
+    @discord.ui.button(label="Published Volume Graph", style=discord.ButtonStyle.secondary, emoji="📈")
     async def button_callback(self, button, interaction):
         try:
             await interaction.response.defer()
+            if len(self.vol_rel_dates) < 2:
+                await interaction.followup.send("Series only has one volume. Graph cannot be generated")
+                button.disabled = True
+                await interaction.message.edit(view=self)
+                return
             buf = generate_graph(self.vol_rel_dates, self.predict, self.title, self.vol_title)
             file = discord.File(buf, filename="chart.png")
             await interaction.followup.send(file=file)
@@ -60,11 +64,9 @@ class ResultsSelector(Select):
             await interaction.message.edit(embed=embed, view=button_view)
         except discord.NotFound:
             await interaction.followup.send("❌ Message no longer exists. Please try searching again.", ephemeral=True)
-
         except discord.HTTPException as e:
             await interaction.followup.send("⚠️ Something went wrong with Discord's API.", ephemeral=True)
             print(f"Discord HTTP error: {e}")
-
         except Exception as e:
             await interaction.followup.send("🚨 An unexpected error occurred.", ephemeral=True)
             import traceback
@@ -76,7 +78,6 @@ class ResultsView(View):
         super().__init__()
         item = ResultsSelector(page, results_dict)
         self.add_item(item)
-
 
 
 def create_results_page(count, search_results):

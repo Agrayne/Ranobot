@@ -34,6 +34,7 @@ def generate_graph(vol_rel_dates, predict, title, vol_title):
 
 
     # Had to do this because titles weren't being displayed properly
+    ### Need to remember to remove this from the git repo
     font_path_regular = "./fonts/NotoSansCJK-Regular.ttc"
     jp_font_regular = font_manager.FontProperties(fname=font_path_regular)
     font_path_bold = "./fonts/NotoSansCJK-Bold.ttc"
@@ -45,7 +46,7 @@ def generate_graph(vol_rel_dates, predict, title, vol_title):
     fig.patch.set_facecolor('#1e1e1e')  # dark gray background for the figure
     ax.set_facecolor('#1e1e1e')         # dark gray background for the plot area
     ax.yaxis.grid(True, color='white', linestyle='-', alpha=0.3)
-    ax.xaxis.grid(False)  # turn off vertical grid lines
+    ax.xaxis.grid(False)
     ax.plot(jp_dates, jp_vols, label="JP", color="#6c5ce7", marker="o")
     if predict:
         gaps = [(jp_dates[i+1] - jp_dates[i]).days for i in range(len(jp_dates) - 1)]
@@ -83,7 +84,7 @@ def generate_graph(vol_rel_dates, predict, title, vol_title):
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncols=3, frameon=False)
     fig.text(0.05, 0.1, f'‣ Average Monthly Gap —— JP: {avg_gap_months:.2f}',
             ha='left', va='bottom', fontsize=10)
-    fig.text(0.05, 0.05, f'- Latest Release ——  JP:  {vol_title}',
+    fig.text(0.05, 0.05, f'- Latest Release ——  JP:    {vol_title}',
             ha='left', va='bottom', fontsize=10, fontproperties=jp_font_regular)
     
     buf = io.BytesIO()
