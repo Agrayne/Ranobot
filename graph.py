@@ -40,7 +40,8 @@ def generate_graph(vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vo
         en_plot = True
         en_vols, en_dates = zip(*[(vol, dates) for vol, dates in vol_rel_dates_en.items()])
         if len(vol_rel_dates_en) > 1:
-            en_predict = True
+            if en_dates[-1] < datetime.today().date():
+                en_predict = True
             gaps_bw_months_en = [months_between_vols(en_dates[i], en_dates[i+1]) for i in range(len(en_dates) - 1)]
             avg_gap_months_en = sum(gaps_bw_months_en) / len(gaps_bw_months_en)
 
