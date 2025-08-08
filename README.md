@@ -4,9 +4,12 @@ Try out the bot [here](https://discord.com/oauth2/authorize?client_id=1400132537
 
 ## Functions
 ### 1. Search and Display Light Novel information
-*You can select the sort order of your search results as well*
+
+- *You can select the sort order of your search results*
+- *There is an option to filter out either Licensed or Unlicensed series during search*
 
 ![Search Function](https://i.ibb.co/xSp7yvvh/Discord-Ux3-Y8ki-MCt.png)
+
 ### 2. Generate a graph to compare volume releases
 ![Generated Graph](https://i.ibb.co/SWpmm03/Screenshot-2025-08-07-160622.png)
 
