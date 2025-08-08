@@ -3,36 +3,39 @@ from discord.ui import Select, View
 from discord.ext.pages import Page
 from bot_utils import fetch_series_info, create_embed
 from graph import generate_graph
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-####### Custom View and Selector Classes #######
+### Custom View and Selector Classes ###
 
 class GraphButtonView(discord.ui.View):
-    def __init__(self, vol_rel_dates, predict, title, vol_title):
+    def __init__(self, vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vol_jp, latest_vol_en):
         super().__init__()
-        self.vol_rel_dates = vol_rel_dates
+        self.vol_rel_dates_jp = vol_rel_dates_jp
+        self.vol_rel_dates_en = vol_rel_dates_en
         self.predict = predict
         self.title = title
-        self.vol_title = vol_title
+        self.latest_vol_jp = latest_vol_jp
+        self.latest_vol_en = latest_vol_en
     @discord.ui.button(label="Published Volume Graph", style=discord.ButtonStyle.secondary, emoji="📈")
     async def button_callback(self, button, interaction):
         try:
             await interaction.response.defer()
-            if len(self.vol_rel_dates) < 2:
+            if len(self.vol_rel_dates_jp) < 2:
                 await interaction.followup.send("Series only has one volume. Graph cannot be generated")
                 button.disabled = True
                 await interaction.message.edit(view=self)
                 return
-            buf = generate_graph(self.vol_rel_dates, self.predict, self.title, self.vol_title)
+            buf = generate_graph(self.vol_rel_dates_jp, self.vol_rel_dates_en, self.predict, self.title, self.latest_vol_jp, self.latest_vol_en)
             file = discord.File(buf, filename="chart.png")
             await interaction.followup.send(file=file)
             button.disabled = True
             await interaction.message.edit(view=self)
         except Exception as e:
             await interaction.followup.send("🚨 An unexpected error occurred.", ephemeral=True)
-            import traceback
-            traceback.print_exc()
-
+            logger.error(f"Error during graph generation for {self.title}", exc_info=True)
 
 class ResultsSelector(Select):
     def __init__(self, page, results_dict):
@@ -59,18 +62,17 @@ class ResultsSelector(Select):
             selected_sn = int(self.values[0])
             ln_name = self.sn_dict[selected_sn]
             ln_id = self.results_dict[ln_name]
-            embed, vol_rel_dates, predict, title, latest_vol = fetch_series_info(ln_id)
-            button_view = GraphButtonView(vol_rel_dates, predict, title, latest_vol)
+            embed, vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vol_jp, latest_vol_en = fetch_series_info(ln_id)
+            button_view = GraphButtonView(vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vol_jp, latest_vol_en)
             await interaction.message.edit(embed=embed, view=button_view)
         except discord.NotFound:
             await interaction.followup.send("❌ Message no longer exists. Please try searching again.", ephemeral=True)
         except discord.HTTPException as e:
             await interaction.followup.send("⚠️ Something went wrong with Discord's API.", ephemeral=True)
-            print(f"Discord HTTP error: {e}")
+            logger.error(f"Discord HTTP error: {e}")
         except Exception as e:
             await interaction.followup.send("🚨 An unexpected error occurred.", ephemeral=True)
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error during graph generation for {title}", exc_info=True)
 
 
 class ResultsView(View):
@@ -79,6 +81,7 @@ class ResultsView(View):
         item = ResultsSelector(page, results_dict)
         self.add_item(item)
 
+### ------------------------------------------------------------- ###
 
 def create_results_page(count, search_results):
     pages_list = []
@@ -99,4 +102,3 @@ def create_results_page(count, search_results):
         )
         pages_list.append(page)
     return pages_list
-

@@ -3,6 +3,7 @@ import json
 import aiohttp
 import asyncio
 import math
+import logging
 from discord import Embed
 from dataclasses import dataclass, field
 from datetime import datetime, date
@@ -13,6 +14,7 @@ VOLUMES_API_ENDPOINT = "https://ranobedb.org/api/v0/books/"
 IMAGES_ENDPOINT = "https://images.ranobedb.org/"
 BOOKWALKER_ENDPOINT = "https://bookwalker.jp/series/"
 
+logger = logging.getLogger(__name__)
 
 ####### Misc Functions 1 #######
 
@@ -24,7 +26,7 @@ def convert_to_date(date_str, vname_or_sid=None):
     except ValueError:
         if date_str[-2:] == "99":                   # Some volumes on the site have their release dates as 99
             date_str = date_str[:-2]+"25"           # This is just a quick workaround until the API fixed it
-        print(f"Series ID or Volume Name: [{vname_or_sid}] had incorrect date. Replaced with '25'")
+        logger.info(f"Series ID or Volume Name: [{vname_or_sid}] had incorrect date. Replaced with '25'")
         d = datetime.strptime(date_str, "%Y%m%d").date()
         return d
 
@@ -34,18 +36,27 @@ def convert_to_date(date_str, vname_or_sid=None):
 @dataclass
 class Volume:
     id: int
-    title: str
+    lang: str
+    title_jp: str
+    title_en: Optional[str]
     sort_order: int
     jp_release_date: Optional[date] = None
     en_release_date: Optional[date] = None
 
     @classmethod
     def from_series_json(cls, series_json: dict) -> 'Volume':
+        if series_json["lang"] == "en":
+            en_release_date = convert_to_date(series_json["c_release_dates"]["en"], series_json.get("title"))
+        else:
+            en_release_date = None
         return cls(
             id=series_json["id"],
-            title=series_json["title"],
+            lang=series_json["lang"],
+            title_jp=series_json["title_orig"],
+            title_en=series_json["title"],
             sort_order=series_json["sort_order"],
-            jp_release_date=convert_to_date(series_json.get("c_release_date"), series_json.get("title"))
+            jp_release_date=convert_to_date(series_json["c_release_dates"]["ja"], series_json.get("title")),
+            en_release_date=en_release_date
         )
 
 @dataclass
@@ -63,6 +74,7 @@ class Series:
     bookwalker_url: Optional[str]
     lang: str
     tags: List[str]
+    licensed: bool
     volumes: List[Volume] = field(default_factory=list)
 
     @classmethod
@@ -70,12 +82,14 @@ class Series:
         series_data = data["series"]
         volumes = [Volume.from_series_json(vol) for vol in series_data.get("books", [])]
         tags = [tag["name"].capitalize() for tag in series_data.get("tags", [])]
-        if series_data["lang"]=='ja':
-            desc = series_data.get("book_description", {}).get("description_ja")
-        else:
-            desc = series_data.get("book_description", {}).get("description")
         first_released = str(convert_to_date(series_data.get("start_date"),series_data.get("id"))) + " (JP)"
         latest_released = str(volumes[-1].jp_release_date) + " (JP)"
+        if series_data["lang"]=='ja':
+            licensed = False
+            desc = series_data.get("book_description", {}).get("description_ja")
+        else:
+            licensed = True
+            desc = series_data.get("book_description", {}).get("description")
         bookwalker_id = str(series_data.get("bookwalker_id"))
         bookwalker_url = BOOKWALKER_ENDPOINT+bookwalker_id if bookwalker_id is not None else None
         return cls(
@@ -92,6 +106,7 @@ class Series:
             bookwalker_url=bookwalker_url,
             lang=series_data["lang"],
             tags=tags,
+            licensed=licensed,
             volumes=volumes
         )
 
@@ -133,15 +148,20 @@ def paginate_results(flat_list, items_per_page=10):
         paginated[i + 1] = {name: id_ for name, id_ in chunk}
     return paginated
 
-
 def fetch_series_info(id):
     response = requests.get(SERIES_API_ENDPOINT+f'/{str(id)}')
     data = response.json()
     series = Series.from_json(data)
-    vol_rel_dates = {}
-    latest_vol = series.volumes[-1].title
+    vol_rel_dates_jp = {}
+    vol_rel_dates_en = {}
+    latest_vol_jp = None
+    latest_vol_en = None
     for vol in sorted(series.volumes, key=lambda v: v.sort_order):
-        vol_rel_dates[vol.sort_order] = vol.jp_release_date
+        vol_rel_dates_jp[vol.sort_order] = vol.jp_release_date
+        latest_vol_jp = vol.title_jp
+        if vol.lang == "en":
+            vol_rel_dates_en[vol.sort_order] = vol.en_release_date
+            latest_vol_en = vol.title_en
     predict = True if series.publication_status == "ongoing" else False
     if series.lang == 'ja':
         description = f"***{series.romaji}***\n\n"+series.description+"\n\n"
@@ -149,7 +169,7 @@ def fetch_series_info(id):
     else:
         description = f"***{series.original_title} | {series.original_romaji}***\n\n"+series.description+"\n\n"
         embed =  create_embed(15204352,series.title,description,series.publication_status,series.first_released,series.latest_released,series.image_url,series.bookwalker_url,series.tags)
-    return (embed, vol_rel_dates, predict, series.title, latest_vol)
+    return (embed, vol_rel_dates_jp, vol_rel_dates_en, predict, series.title, latest_vol_jp, latest_vol_en)
 
 async def search_series(title, sort, licensed):
     params = {
@@ -157,8 +177,12 @@ async def search_series(title, sort, licensed):
         'sort': sort,
         'limit': 100
     }
-    if licensed:
+    if licensed == 'Licensed':
         params.update({'rl': 'en'})
+    elif licensed == 'Unlicensed':
+        params.update({'rlExclude': 'en'})
+    else:
+        pass
     response = requests.get(SERIES_API_ENDPOINT, params=params)
     result = response.json()
     count = int(result['count'])
