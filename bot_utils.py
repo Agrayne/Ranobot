@@ -72,6 +72,10 @@ class Series:
     latest_released: Optional[date]
     image_url: str
     bookwalker_url: Optional[str]
+    author: list
+    illustrator: list
+    imprint_ja: list
+    publisher_en: list
     lang: str
     tags: List[str]
     licensed: bool
@@ -81,14 +85,21 @@ class Series:
     def from_json(cls, data: dict) -> 'Series':
         series_data = data["series"]
         volumes = [Volume.from_series_json(vol) for vol in series_data.get("books", [])]
+        staff = series_data.get('staff')
+        publishers = series_data.get('publishers')
         tags = [tag["name"].capitalize() for tag in series_data.get("tags", [])]
         first_released = str(convert_to_date(series_data.get("start_date"),series_data.get("id"))) + " (JP)"
         latest_released = str(volumes[-1].jp_release_date) + " (JP)"
+        author = [f'{staff["name"]} ({staff["romaji"]})' if staff["romaji"] is not None else staff["name"] for staff in staff if staff["role_type"] == "author"]
+        illustrator = [f'{staff["name"]} ({staff["romaji"]})' if staff["romaji"] is not None else staff["name"] for staff in staff if staff["role_type"] == "artist"]
+        imprint_ja = [pub["name"] for pub in publishers if pub["publisher_type"] == "imprint" and pub["lang"] == "ja"]
+        publisher_en = [pub["name"] for pub in publishers if pub["publisher_type"] == "publisher" and pub["lang"] == "en"]
         if series_data["lang"]=='ja':
             licensed = False
             desc = series_data.get("book_description", {}).get("description_ja")
         else:
             licensed = True
+            first_released = first_released + f'\n{volumes[0].en_release_date} (EN)'
             desc = series_data.get("book_description", {}).get("description")
         bookwalker_id = str(series_data.get("bookwalker_id"))
         bookwalker_url = BOOKWALKER_ENDPOINT+bookwalker_id if bookwalker_id is not None else None
@@ -104,6 +115,10 @@ class Series:
             latest_released=latest_released,
             image_url=IMAGES_ENDPOINT+series_data["books"][0]["image"]["filename"],
             bookwalker_url=bookwalker_url,
+            author=author,
+            illustrator=illustrator,
+            imprint_ja = imprint_ja[0],
+            publisher_en = publisher_en[0] if publisher_en else [],
             lang=series_data["lang"],
             tags=tags,
             licensed=licensed,
@@ -112,15 +127,19 @@ class Series:
 
 ####### Misc Functions 2 #######
 
-def create_embed(color, title, description, publication_status, first_released, latest_released, image, bw_url, tags):
+def create_embed(color, title, description, publication_status, first_released, latest_released, author, illustrator, publishers, image, bw_url, tags):
     embed = Embed(color=color, title=title, description=description)
     embed.set_image(url=image)
-    embed.add_field(name="Publication Status", value=publication_status.capitalize(), inline=True)
+    embed.add_field(name="Author", value=",\n".join(author), inline=True)
+    embed.add_field(name="Illustrator", value=",\n".join(illustrator), inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
     embed.add_field(name="First Release", value=first_released, inline=True)
     embed.add_field(name="Latest Release", value=latest_released, inline=True)
+    embed.add_field(name="Publication Status", value=publication_status.capitalize(), inline=True)
+    embed.add_field(name="Publisher(s)", value=publishers, inline=False)
     embed.set_footer(text="Data fetched from RanobeDB")
     if bw_url is not None:
-        embed.add_field(name="Links", value=f"[Bookwalker (jp)]({bw_url})", inline=False)
+        embed.add_field(name="Links", value=f"[Bookwalker (JP)]({bw_url})", inline=False)
     if tags:
         embed.add_field(name="Tags", value=", ".join(tags), inline=False)
     return embed
@@ -156,20 +175,27 @@ def fetch_series_info(id):
     vol_rel_dates_en = {}
     latest_vol_jp = None
     latest_vol_en = None
+    latest_release_en = None
     for vol in sorted(series.volumes, key=lambda v: v.sort_order):
         vol_rel_dates_jp[vol.sort_order] = vol.jp_release_date
         latest_vol_jp = vol.title_jp
         if vol.lang == "en":
             vol_rel_dates_en[vol.sort_order] = vol.en_release_date
             latest_vol_en = vol.title_en
+            latest_release_en = vol.en_release_date
     predict = True if series.publication_status == "ongoing" else False
+    publishers = f'{series.imprint_ja} (JP)'
+    graph_title = f'{series.title}   ({series.imprint_ja})' if len(series.title)<80 else f'{series.title[:80]}.....    ({series.imprint_ja}'
     if series.lang == 'ja':
         description = f"***{series.romaji}***\n\n"+series.description+"\n\n"
-        embed =  create_embed(10216,series.title,description,series.publication_status,series.first_released,series.latest_released,series.image_url,series.bookwalker_url,series.tags)
+        embed =  create_embed(10216,series.title,description,series.publication_status,series.first_released,series.latest_released,series.author,series.illustrator,publishers,series.image_url,series.bookwalker_url,series.tags)
     else:
         description = f"***{series.original_title} | {series.original_romaji}***\n\n"+series.description+"\n\n"
-        embed =  create_embed(15204352,series.title,description,series.publication_status,series.first_released,series.latest_released,series.image_url,series.bookwalker_url,series.tags)
-    return (embed, vol_rel_dates_jp, vol_rel_dates_en, predict, series.title, latest_vol_jp, latest_vol_en)
+        graph_title = f'{graph_title[:-1]} | {series.publisher_en})'
+        publishers = publishers + f'\n{series.publisher_en} (EN)'
+        latest_released = series.latest_released + f'\n{latest_release_en} (EN)'
+        embed =  create_embed(15204352,series.title,description,series.publication_status,series.first_released,latest_released,series.author,series.illustrator,publishers,series.image_url,series.bookwalker_url,series.tags)
+    return (embed, vol_rel_dates_jp, vol_rel_dates_en, predict, graph_title, latest_vol_jp, latest_vol_en)
 
 async def search_series(title, sort, licensed):
     params = {
