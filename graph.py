@@ -22,8 +22,6 @@ def months_between_vols(d1, d2):
 
 def generate_graph(vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vol_jp, latest_vol_en):
 
-    title = title if len(title)<90 else title[:90]+"....."
-
     today = datetime.today().date()
 
     dates_jp = vol_rel_dates_jp.values()
@@ -92,6 +90,9 @@ def generate_graph(vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vo
             ax.plot([en_dates[-1], predicted_date_en], [en_vols[-1], predicted_vol_en],
                 linestyle='dotted', color='#50ac00', label='Predicted Next Vol EN')
             plt.scatter(predicted_date_en, predicted_vol_en, edgecolors='gray', facecolors='none')
+        ax.axvline(datetime.today(), color="red", linewidth=2)
+
+    if en_dates and en_dates[-1] > today:
         ax.axvline(datetime.today(), color="red", linewidth=2)
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %y'))
