@@ -15,6 +15,9 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+logging.getLogger("discord.client").setLevel(logging.WARNING)
 ### -------------------- ###
 
 load_dotenv()
