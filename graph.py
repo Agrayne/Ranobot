@@ -92,8 +92,9 @@ def generate_graph(vol_rel_dates_jp, vol_rel_dates_en, predict, title, latest_vo
             plt.scatter(predicted_date_en, predicted_vol_en, edgecolors='gray', facecolors='none')
         ax.axvline(datetime.today(), color="red", linewidth=2)
 
-    if en_dates and en_dates[-1] > today:
-        ax.axvline(datetime.today(), color="red", linewidth=2)
+    if vol_rel_dates_en:
+        if en_dates[-1] > today:
+            ax.axvline(datetime.today(), color="red", linewidth=2)
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %y'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=interval))
