@@ -1,6 +1,6 @@
 # Ranobot
 A simple Discord bot to search Light Novel information from [RanobeDB](https://ranobedb.org) and display it.  
-Try out the bot [here](https://discord.com/oauth2/authorize?client_id=1400132537757732965&permissions=274878023680&integration_type=0&scope=bot) or host it yourself
+Try out the bot [here](https://discord.com/oauth2/authorize?client_id=1400132537757732965&permissions=274878023680&integration_type=0&scope=bot+applications.commands) or host it yourself
 
 ## Functions
 ### 1. Search and Display Light Novel information
